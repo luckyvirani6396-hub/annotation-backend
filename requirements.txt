@@ -1,0 +1,46 @@
+# Core dependencies - compatible versions
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Pydantic (compatible with fastapi 0.104.1)
+# pydantic==2.5.0
+# pydantic-settings==2.1.0
+pydantic==2.9.2
+pydantic-settings==2.5.2
+email-validator==2.1.0
+
+# MongoDB
+pymongo==4.5.0
+motor==3.3.2
+beanie==1.22.0
+
+# Utilities
+python-dotenv==1.0.0
+loguru==0.7.2
+aiofiles==23.2.1
+# pillow==10.1.0
+pillow==10.4.0
+
+httpx==0.25.2
+pyyaml==6.0.1
+
+# Let pip handle anyio dependency automatically (don't specify version)
+# anyio will be installed as version 3.7.1 (compatible with fastapi)
+# httptools
+# httptools==0.6.1
+httptools==0.6.4
+
+
+# Authentication / JWT
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-jose[cryptography]==3.3.0
+
+# ── Distributed task queue (production scale: 100 k+ images) ─────────────────
+celery[redis]==5.3.6
+redis==5.0.1
+flower==2.0.1
+# Sync MongoDB driver for Celery workers (Motor is async-only).
+# `pymongo` is already a transitive dep of `motor` but we pin it explicitly.
+pymongo==4.5.0
