@@ -473,7 +473,7 @@ def _persist_dataset(
             "image_id": assigned_id,
             "file_name": rec["original"],
             "stored_filename": rec["stored"],
-            "file_path": os.path.join(target_dir, rec["stored"]),
+           "file_path": os.path.join(settings.UPLOAD_DIR, "images", rec["stored"]),
             "image_url": _build_image_url(rec["stored"]),
             "width": width,
             "height": height,
