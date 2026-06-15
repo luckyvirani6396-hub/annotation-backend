@@ -10,9 +10,12 @@ logs/
 uploads/
 *.log
 .git/
-.gitignore
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .DS_Store
-README.md
+DEPLOY.md
+docker-compose.yml
+docker-compose.override.yml
+render.yaml
+railway.toml

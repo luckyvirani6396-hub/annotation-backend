@@ -24,13 +24,15 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Application code
+# Application code & process scripts
 COPY app ./app
+COPY scripts ./scripts
+RUN chmod +x /app/scripts/*.sh
 
 # Runtime dirs (mounted as volumes in production)
 RUN mkdir -p /app/uploads/images /app/uploads/_staging /app/uploads/_exports /app/logs
 
 EXPOSE 9000
 
-# Default command — overridden for the worker service in docker-compose.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "9000", "--workers", "4"]
+# Overridden per service in docker-compose / Render / Railway.
+CMD ["/bin/sh", "/app/scripts/start-api.sh"]

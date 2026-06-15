@@ -1,0 +1,61 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Deploy: connect this repo in Render → New → Blueprint → select render.yaml
+#
+# Before deploy:
+#   1. Create a free MongoDB Atlas cluster and set MONGODB_URL in the dashboard.
+#   2. Replace JWT_SECRET and ADMIN_PASSWORD (sync: false vars are set manually).
+#
+# Uses combined API+worker mode so uploads/staging share one persistent disk.
+
+services:
+  - type: web
+    name: annotation-api
+    runtime: docker
+    plan: starter
+    dockerCommand: /bin/sh /app/scripts/start-combined.sh
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "9000"
+      - key: MONGODB_URL
+        sync: false
+      - key: DATABASE_NAME
+        value: annotation_db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@annotation.studio
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_FULL_NAME
+        value: Workspace Admin
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ASSET_BASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: annotation-redis
+          property: connectionString
+      # Append database index to the Redis URL from the dashboard, e.g.
+      # CELERY_BROKER_URL=redis://.../1  CELERY_RESULT_BACKEND=redis://.../2
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: CELERY_WORKER_CONCURRENCY
+        value: "2"
+      - key: UVICORN_WORKERS
+        value: "2"
+    disk:
+      name: annotation-uploads
+      mountPath: /app/uploads
+      sizeGB: 10
+
+  - type: redis
+    name: annotation-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []

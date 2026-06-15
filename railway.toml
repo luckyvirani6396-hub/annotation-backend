@@ -1,0 +1,21 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "/bin/sh /app/scripts/start-combined.sh"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Set these in the Railway dashboard (Variables tab):
+#   MONGODB_URL       — MongoDB Atlas connection string
+#   JWT_SECRET        — long random string (openssl rand -hex 48)
+#   ADMIN_PASSWORD    — bootstrap admin password
+#   CORS_ORIGINS      — https://your-frontend.vercel.app
+#   ASSET_BASE_URL    — https://your-api.up.railway.app
+#
+# Add plugins in Railway:
+#   Redis → wire REDIS_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND
+#   Volume mounted at /app/uploads (required for image uploads)
