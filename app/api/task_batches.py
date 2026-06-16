@@ -546,10 +546,14 @@ async def get_my_assignments(
         paginated = active_batches[skip:skip + page_size]
         total_pages = (total + page_size - 1) // page_size
 
+        # Format with real progress counts
+        import asyncio
+        formatted_batches = await asyncio.gather(*[_format_batch_with_progress_real(b) for b in paginated])
+
         return {
             "success": True,
             "data": {
-                "batches": [_format_batch_with_progress(b) for b in paginated],
+                "batches": formatted_batches,
                 "pagination": {
                     "total": total,
                     "page": page,

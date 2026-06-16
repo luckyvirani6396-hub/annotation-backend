@@ -58,6 +58,7 @@ class UserUpdateRequest(BaseModel):
     role: Optional[UserRole] = None
     department: Optional[str] = None
     is_active: Optional[bool] = None
+    password: Optional[str] = Field(None, min_length=8, max_length=128)
 
 
 class UserPublicWithRole(BaseModel):

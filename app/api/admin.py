@@ -196,6 +196,10 @@ async def update_user(
             update_fields["is_active"] = request.is_active
             changes["is_active"] = request.is_active
 
+        if request.password is not None:
+            update_fields["password_hash"] = hash_password(request.password)
+            changes["password"] = "[REDACTED]"
+
         # Update user
         if update_fields:
             await user_repo.update_user(user_id, **update_fields)
