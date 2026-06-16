@@ -276,6 +276,14 @@ async def list_all_batches(
                     u = await user_repo.get_user_by_id(assigned_to)
                     user_cache[assigned_to] = u.get("full_name", "Unknown") if u else "Unknown"
                 annotator_name = user_cache[assigned_to]
+
+            reviewed_by = b.get("reviewed_by")
+            reviewer_name = None
+            if reviewed_by:
+                if reviewed_by not in user_cache:
+                    u = await user_repo.get_user_by_id(reviewed_by)
+                    user_cache[reviewed_by] = u.get("full_name", "Unknown") if u else "Unknown"
+                reviewer_name = user_cache[reviewed_by]
             
             prog = progress_results[idx]
             
@@ -289,6 +297,8 @@ async def list_all_batches(
                 "status": _normalize_status(b.get("status")),
                 "assigned_to": assigned_to,
                 "annotator_name": annotator_name,
+                "reviewed_by": reviewed_by,
+                "reviewer_name": reviewer_name,
                 "deadline": b.get("deadline").isoformat() if b.get("deadline") else None,
                 "submitted_at": b.get("submitted_at").isoformat() if b.get("submitted_at") else None,
                 "reviewed_at": b.get("reviewed_at").isoformat() if b.get("reviewed_at") else None,
@@ -866,12 +876,39 @@ async def get_review_queue(
     """Get all batches ready for review (checker/admin view)."""
     db = db_manager.get_db()
     batch_repo = TaskBatchRepository(db)
+    user_repo = UserRepository(db)
 
     batches = await batch_repo.get_batches_for_review()
+    
+    # Enrich batches with user names
+    user_cache = {}
+    enriched_batches = []
+    for b in batches:
+        assigned_to = b.get("assigned_to")
+        annotator_name = None
+        if assigned_to:
+            if assigned_to not in user_cache:
+                u = await user_repo.get_user_by_id(assigned_to)
+                user_cache[assigned_to] = u.get("full_name", "Unknown") if u else "Unknown"
+            annotator_name = user_cache[assigned_to]
+            
+        reviewed_by = b.get("reviewed_by")
+        reviewer_name = None
+        if reviewed_by:
+            if reviewed_by not in user_cache:
+                u = await user_repo.get_user_by_id(reviewed_by)
+                user_cache[reviewed_by] = u.get("full_name", "Unknown") if u else "Unknown"
+            reviewer_name = user_cache[reviewed_by]
+            
+        b_copy = dict(b)
+        b_copy["annotator_name"] = annotator_name
+        b_copy["reviewer_name"] = reviewer_name
+        enriched_batches.append(b_copy)
+
     return {
         "success": True,
         "data": {
-            "batches": [_format_batch_dict(b) for b in batches],
+            "batches": [_format_batch_dict(b) for b in enriched_batches],
             "total": len(batches),
         },
     }
@@ -883,7 +920,7 @@ async def get_review_queue(
 def _normalize_status(status_val: str) -> str:
     if not status_val:
         return "pending"
-    if status_val in ("annotated", "under_review"):
+    if status_val == "annotated":
         return "submitted"
     if status_val == "rejected":
         return "rework"
@@ -904,6 +941,10 @@ def _format_batch_response(batch: dict) -> TaskBatchResponse:
         assigned_to=batch.get("assigned_to"),
         assigned_date=batch.get("assigned_date"),
         deadline=batch.get("deadline"),
+        reviewed_by=batch.get("reviewed_by"),
+        reviewed_at=batch.get("reviewed_at"),
+        annotator_name=batch.get("annotator_name"),
+        reviewer_name=batch.get("reviewer_name"),
         created_at=batch.get("created_at"),
         updated_at=batch.get("updated_at"),
     )
@@ -928,6 +969,8 @@ def _format_batch_dict(batch: dict) -> dict:
         "review_notes": batch.get("review_notes"),
         "rejection_reason": batch.get("rejection_reason"),
         "submission_notes": batch.get("submission_notes"),
+        "annotator_name": batch.get("annotator_name"),
+        "reviewer_name": batch.get("reviewer_name"),
         "created_at": batch.get("created_at").isoformat() if batch.get("created_at") else None,
         "updated_at": batch.get("updated_at").isoformat() if batch.get("updated_at") else None,
     }
@@ -967,7 +1010,26 @@ async def _format_batch_with_progress_real(batch: dict) -> TaskBatchWithProgress
     pending = max(0, total - annotated)
     pct = round(100.0 * annotated / total, 1) if total > 0 else 0.0
 
-    response = _format_batch_response(batch)
+    db = db_manager.get_db()
+    user_repo = UserRepository(db)
+    
+    annotator_name = None
+    assigned_to = batch.get("assigned_to")
+    if assigned_to:
+        u = await user_repo.get_user_by_id(assigned_to)
+        annotator_name = u.get("full_name") if u else None
+
+    reviewer_name = None
+    reviewed_by = batch.get("reviewed_by")
+    if reviewed_by:
+        u = await user_repo.get_user_by_id(reviewed_by)
+        reviewer_name = u.get("full_name") if u else None
+
+    batch_copy = dict(batch)
+    batch_copy["annotator_name"] = annotator_name
+    batch_copy["reviewer_name"] = reviewer_name
+
+    response = _format_batch_response(batch_copy)
     return TaskBatchWithProgress(
         **response.model_dump(),
         images_annotated=annotated,

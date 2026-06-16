@@ -123,8 +123,13 @@ class TaskBatchResponse(BaseModel):
     assigned_to: Optional[str] = None
     assigned_date: Optional[datetime] = None
     deadline: Optional[datetime] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    annotator_name: Optional[str] = None
+    reviewer_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
 
 
 class TaskBatchWithProgress(TaskBatchResponse):

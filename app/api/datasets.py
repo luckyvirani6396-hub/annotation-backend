@@ -14,7 +14,7 @@ from app.config.database import db_manager, get_collection
 from app.repositories import TaskBatchRepository, AuditLogRepository, UserRepository
 from app.schemas.rbac import TaskStatus
 from app.services.annotation_service import AnnotationService
-from app.api.task_batches import _format_batch_with_progress_real
+from app.api.task_batches import _format_batch_with_progress_real, _normalize_status
 
 router = APIRouter(prefix="/api/datasets", tags=["Datasets"])
 
@@ -46,10 +46,7 @@ async def _get_batch_summary(project_id: str, db) -> dict:
     counts: dict = {s.value: 0 for s in TaskStatus}
     for b in batches:
         s = b.get("status", TaskStatus.PENDING.value)
-        if s == "annotated":
-            s = TaskStatus.SUBMITTED.value
-        elif s == "rejected":
-            s = TaskStatus.REWORK.value
+        s = _normalize_status(s)
         counts[s] = counts.get(s, 0) + 1
     return {
         "total": total,
@@ -181,7 +178,7 @@ async def list_dataset_batches(
     import asyncio
     progress_results = await asyncio.gather(*[_format_batch_with_progress_real(b) for b in batches])
 
-    # Enrich with annotator names
+    # Enrich with annotator/reviewer names
     result = []
     user_cache: dict = {}
     for idx, b in enumerate(batches):
@@ -193,6 +190,14 @@ async def list_dataset_batches(
                 user_cache[assigned_to] = u.get("full_name", "Unknown") if u else "Unknown"
             annotator_name = user_cache[assigned_to]
         
+        reviewed_by = b.get("reviewed_by")
+        reviewer_name = None
+        if reviewed_by:
+            if reviewed_by not in user_cache:
+                u = await user_repo.get_user_by_id(reviewed_by)
+                user_cache[reviewed_by] = u.get("full_name", "Unknown") if u else "Unknown"
+            reviewer_name = user_cache[reviewed_by]
+
         prog = progress_results[idx]
         
         result.append({
@@ -202,9 +207,11 @@ async def list_dataset_batches(
             "start_index": b.get("start_index"),
             "end_index": b.get("end_index"),
             "image_count": b.get("image_count"),
-            "status": b.get("status"),
+            "status": _normalize_status(b.get("status")),
             "assigned_to": assigned_to,
             "annotator_name": annotator_name,
+            "reviewed_by": reviewed_by,
+            "reviewer_name": reviewer_name,
             "deadline": b.get("deadline").isoformat() if b.get("deadline") else None,
             "submitted_at": b.get("submitted_at").isoformat() if b.get("submitted_at") else None,
             "reviewed_at": b.get("reviewed_at").isoformat() if b.get("reviewed_at") else None,
