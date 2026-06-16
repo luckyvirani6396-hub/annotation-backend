@@ -14,6 +14,7 @@ from app.config.database import db_manager, get_collection
 from app.repositories import TaskBatchRepository, AuditLogRepository, UserRepository
 from app.schemas.rbac import TaskStatus
 from app.services.annotation_service import AnnotationService
+from app.api.task_batches import _format_batch_with_progress_real
 
 router = APIRouter(prefix="/api/datasets", tags=["Datasets"])
 
@@ -41,7 +42,7 @@ async def _get_batch_summary(project_id: str, db) -> dict:
     batch_repo = TaskBatchRepository(db)
     batches, total = await batch_repo.get_batches_by_project(project_id, page=1, page_size=1000)
     if total == 0:
-        return {"total": 0, "pending": 0, "assigned": 0, "annotated": 0, "approved": 0, "rejected": 0}
+        return {"total": 0, "pending": 0, "assigned": 0, "in_progress": 0, "submitted": 0, "approved": 0, "rework": 0}
     counts: dict = {s.value: 0 for s in TaskStatus}
     for b in batches:
         s = b.get("status", TaskStatus.PENDING.value)
@@ -50,10 +51,10 @@ async def _get_batch_summary(project_id: str, db) -> dict:
         "total": total,
         "pending": counts.get(TaskStatus.PENDING.value, 0),
         "assigned": counts.get(TaskStatus.ASSIGNED.value, 0),
-        "annotated": counts.get(TaskStatus.ANNOTATED.value, 0),
-        "under_review": counts.get(TaskStatus.UNDER_REVIEW.value, 0),
+        "in_progress": counts.get(TaskStatus.IN_PROGRESS.value, 0),
+        "submitted": counts.get(TaskStatus.SUBMITTED.value, 0),
         "approved": counts.get(TaskStatus.APPROVED.value, 0),
-        "rejected": counts.get(TaskStatus.REJECTED.value, 0),
+        "rework": counts.get(TaskStatus.REWORK.value, 0),
     }
 
 
@@ -171,10 +172,14 @@ async def list_dataset_batches(
         batches = [b for b in batches if b.get("assigned_to") == user_id]
         total = len(batches)
 
+    # Fetch progress stats for all batches
+    import asyncio
+    progress_results = await asyncio.gather(*[_format_batch_with_progress_real(b) for b in batches])
+
     # Enrich with annotator names
     result = []
     user_cache: dict = {}
-    for b in batches:
+    for idx, b in enumerate(batches):
         assigned_to = b.get("assigned_to")
         annotator_name = None
         if assigned_to:
@@ -182,6 +187,9 @@ async def list_dataset_batches(
                 u = await user_repo.get_user_by_id(assigned_to)
                 user_cache[assigned_to] = u.get("full_name", "Unknown") if u else "Unknown"
             annotator_name = user_cache[assigned_to]
+        
+        prog = progress_results[idx]
+        
         result.append({
             "id": str(b["_id"]),
             "project_id": b["project_id"],
@@ -197,6 +205,12 @@ async def list_dataset_batches(
             "reviewed_at": b.get("reviewed_at").isoformat() if b.get("reviewed_at") else None,
             "rejection_reason": b.get("rejection_reason"),
             "created_at": b.get("created_at").isoformat() if b.get("created_at") else None,
+            # Progress counts
+            "images_annotated": prog.images_annotated,
+            "annotated_count": prog.images_annotated,       # for BatchesPage.jsx
+            "completed_images": prog.images_annotated,      # for BatchesPage.jsx
+            "images_pending": prog.images_pending,
+            "progress_percentage": prog.progress_percentage,
         })
 
     return {

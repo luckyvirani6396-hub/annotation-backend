@@ -202,7 +202,7 @@ async def get_my_progress(
             }
 
         # Count completed batches
-        completed = sum(1 for b in batches if b.get("status") in ["annotated", "under_review", "approved"])
+        completed = sum(1 for b in batches if b.get("status") in ["submitted", "approved"])
 
         # Get active datasets to filter out deleted/inactive ones
         active_datasets = await db["dataset_metadata"].find({"is_active": True}).to_list(None)
@@ -300,7 +300,7 @@ async def get_user_progress(
             }
 
         # Count completed batches
-        completed = sum(1 for b in batches if b.get("status") in ["annotated", "under_review", "approved"])
+        completed = sum(1 for b in batches if b.get("status") in ["submitted", "approved"])
 
         # Get active datasets to filter out deleted/inactive ones
         active_datasets = await db["dataset_metadata"].find({"is_active": True}).to_list(None)

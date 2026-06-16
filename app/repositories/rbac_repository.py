@@ -236,9 +236,9 @@ class TaskBatchRepository:
         return result.modified_count > 0
 
     async def get_batches_for_review(self, statuses: Optional[List[str]] = None) -> List[Dict]:
-        """Get all batches with given statuses (default: annotated/under_review)."""
+        """Get all batches with given statuses (default: submitted)."""
         if statuses is None:
-            statuses = [TaskStatus.ANNOTATED.value, TaskStatus.UNDER_REVIEW.value]
+            statuses = [TaskStatus.SUBMITTED.value]
         return await self.collection.find({"status": {"$in": statuses}}).sort("updated_at", -1).to_list(None)
 
     async def list_all_batches(

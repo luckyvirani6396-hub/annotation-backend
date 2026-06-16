@@ -262,9 +262,13 @@ async def list_all_batches(
             search=search,
         )
 
+        # Fetch progress stats for all batches
+        import asyncio
+        progress_results = await asyncio.gather(*[_format_batch_with_progress_real(b) for b in batches])
+
         user_cache: dict = {}
         result = []
-        for b in batches:
+        for idx, b in enumerate(batches):
             assigned_to = b.get("assigned_to")
             annotator_name = None
             if assigned_to:
@@ -272,6 +276,9 @@ async def list_all_batches(
                     u = await user_repo.get_user_by_id(assigned_to)
                     user_cache[assigned_to] = u.get("full_name", "Unknown") if u else "Unknown"
                 annotator_name = user_cache[assigned_to]
+            
+            prog = progress_results[idx]
+            
             result.append({
                 "id": str(b["_id"]),
                 "project_id": b["project_id"],
@@ -287,6 +294,12 @@ async def list_all_batches(
                 "reviewed_at": b.get("reviewed_at").isoformat() if b.get("reviewed_at") else None,
                 "rejection_reason": b.get("rejection_reason"),
                 "created_at": b.get("created_at").isoformat() if b.get("created_at") else None,
+                # Progress counts
+                "images_annotated": prog.images_annotated,
+                "annotated_count": prog.images_annotated,       # for BatchesPage.jsx
+                "completed_images": prog.images_annotated,      # for BatchesPage.jsx
+                "images_pending": prog.images_pending,
+                "progress_percentage": prog.progress_percentage,
             })
 
         total_pages = ceil(total / page_size) if total else 0
@@ -338,6 +351,12 @@ async def get_batch(
     user_id = str(current_user["_id"])
     if user_role not in ("admin", "checker") and batch.get("assigned_to") != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised to view this batch")
+
+    # Transition to in_progress if currently assigned and opened by assignee
+    if batch.get("status") == TaskStatus.ASSIGNED.value and batch.get("assigned_to") == user_id:
+        ok = await batch_repo.update_batch_status(batch_id, TaskStatus.IN_PROGRESS)
+        if ok:
+            batch["status"] = TaskStatus.IN_PROGRESS.value
 
     return await _format_batch_with_progress_real(batch)
 
@@ -655,8 +674,9 @@ async def submit_batch(
 
     if batch["status"] not in (
         TaskStatus.ASSIGNED.value,
+        TaskStatus.IN_PROGRESS.value,
+        TaskStatus.REWORK.value,
         TaskStatus.PENDING.value,
-        TaskStatus.REJECTED.value,
     ):
         raise HTTPException(
             status_code=400,
@@ -665,7 +685,7 @@ async def submit_batch(
 
     ok = await batch_repo.update_batch_fields(
         batch_id,
-        status=TaskStatus.ANNOTATED.value,
+        status=TaskStatus.SUBMITTED.value,
         submitted_at=datetime.utcnow(),
         submission_notes=request.notes,
     )
@@ -677,7 +697,7 @@ async def submit_batch(
         action="submit_batch",
         resource_type="batch",
         resource_id=batch_id,
-        changes={"status": TaskStatus.ANNOTATED.value, "notes": request.notes},
+        changes={"status": TaskStatus.SUBMITTED.value, "notes": request.notes},
     )
     return {"success": True, "message": "Batch submitted for review"}
 
@@ -697,7 +717,7 @@ async def approve_batch(
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    if batch["status"] not in (TaskStatus.ANNOTATED.value, TaskStatus.UNDER_REVIEW.value):
+    if batch["status"] not in (TaskStatus.SUBMITTED.value,):
         raise HTTPException(
             status_code=400,
             detail=f"Batch cannot be approved from status '{batch['status']}'",
@@ -738,7 +758,7 @@ async def reject_batch(
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    if batch["status"] not in (TaskStatus.ANNOTATED.value, TaskStatus.UNDER_REVIEW.value):
+    if batch["status"] not in (TaskStatus.SUBMITTED.value,):
         raise HTTPException(
             status_code=400,
             detail=f"Batch cannot be rejected from status '{batch['status']}'",
@@ -749,7 +769,7 @@ async def reject_batch(
 
     ok = await batch_repo.update_batch_fields(
         batch_id,
-        status=TaskStatus.REJECTED.value,  # send back to annotator
+        status=TaskStatus.REWORK.value,  # send back to annotator
         reviewed_by=str(current_user["_id"]),
         reviewed_at=datetime.utcnow(),
         review_notes=request.notes,
@@ -763,7 +783,7 @@ async def reject_batch(
         action="reject_batch",
         resource_type="batch",
         resource_id=batch_id,
-        changes={"status": TaskStatus.REJECTED.value, "reason": request.reason},
+        changes={"status": TaskStatus.REWORK.value, "reason": request.reason},
     )
     return {"success": True, "message": "Batch sent back to annotator"}
 

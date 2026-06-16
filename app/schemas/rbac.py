@@ -22,10 +22,10 @@ class TaskStatus(str, Enum):
     """Task/Batch status states."""
     PENDING = "pending"
     ASSIGNED = "assigned"
-    ANNOTATED = "annotated"
-    UNDER_REVIEW = "under_review"
+    IN_PROGRESS = "in_progress"
+    SUBMITTED = "submitted"
     APPROVED = "approved"
-    REJECTED = "rejected"
+    REWORK = "rework"
 
 
 class AnnotationStatus(str, Enum):
