@@ -880,10 +880,18 @@ async def get_review_queue(
 
     batches = await batch_repo.get_batches_for_review()
     
+    user_role = current_user.get("role")
+    user_id = str(current_user["_id"])
+
     # Enrich batches with user names
     user_cache = {}
     enriched_batches = []
     for b in batches:
+        reviewed_by = b.get("reviewed_by")
+        # Checkers can only see review queue batches assigned to them specifically
+        if user_role == "checker" and reviewed_by != user_id:
+            continue
+
         assigned_to = b.get("assigned_to")
         annotator_name = None
         if assigned_to:
@@ -892,7 +900,6 @@ async def get_review_queue(
                 user_cache[assigned_to] = u.get("full_name", "Unknown") if u else "Unknown"
             annotator_name = user_cache[assigned_to]
             
-        reviewed_by = b.get("reviewed_by")
         reviewer_name = None
         if reviewed_by:
             if reviewed_by not in user_cache:
