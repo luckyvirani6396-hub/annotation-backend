@@ -46,6 +46,10 @@ async def _get_batch_summary(project_id: str, db) -> dict:
     counts: dict = {s.value: 0 for s in TaskStatus}
     for b in batches:
         s = b.get("status", TaskStatus.PENDING.value)
+        if s in ("annotated", "under_review"):
+            s = TaskStatus.SUBMITTED.value
+        elif s == "rejected":
+            s = TaskStatus.REWORK.value
         counts[s] = counts.get(s, 0) + 1
     return {
         "total": total,

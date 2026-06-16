@@ -161,7 +161,12 @@ class TaskBatchRepository:
         """List batches for project."""
         query = {"project_id": project_id}
         if status:
-            query["status"] = status.value
+            if status == TaskStatus.SUBMITTED:
+                query["status"] = {"$in": [TaskStatus.SUBMITTED.value, "annotated", "under_review"]}
+            elif status == TaskStatus.REWORK:
+                query["status"] = {"$in": [TaskStatus.REWORK.value, "rejected"]}
+            else:
+                query["status"] = status.value
 
         total = await self.collection.count_documents(query)
         skip = (page - 1) * page_size
@@ -177,7 +182,12 @@ class TaskBatchRepository:
         """Get batches assigned to annotator."""
         query = {"assigned_to": annotator_id}
         if status:
-            query["status"] = status.value
+            if status == TaskStatus.SUBMITTED:
+                query["status"] = {"$in": [TaskStatus.SUBMITTED.value, "annotated", "under_review"]}
+            elif status == TaskStatus.REWORK:
+                query["status"] = {"$in": [TaskStatus.REWORK.value, "rejected"]}
+            else:
+                query["status"] = status.value
         return await self.collection.find(query).to_list(None)
 
     async def assign_batch(
@@ -253,7 +263,12 @@ class TaskBatchRepository:
         """List all batches across all projects (admin view)."""
         query: Dict[str, Any] = {}
         if status:
-            query["status"] = status
+            if status == "submitted":
+                query["status"] = {"$in": ["submitted", "annotated", "under_review"]}
+            elif status == "rework":
+                query["status"] = {"$in": ["rework", "rejected"]}
+            else:
+                query["status"] = status
         if project_id:
             query["project_id"] = project_id
         elif project_ids is not None:

@@ -195,7 +195,7 @@ async def list_batches(
 async def list_all_batches(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
-    status: str = Query(None),
+    batch_status: Optional[str] = Query(None, alias="status"),
     project_id: str = Query(None, description="Optional dataset name filter"),
     search: str = Query(None, description="Search by dataset name or batch number"),
     current_user: dict = Depends(require_admin),
@@ -216,13 +216,13 @@ async def list_all_batches(
 
     try:
         status_filter = None
-        if status:
+        if batch_status:
             try:
-                status_filter = TaskStatus(status).value
+                status_filter = TaskStatus(batch_status).value
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid status: {status}",
+                    detail=f"Invalid status: {batch_status}",
                 )
 
         active_project_ids = None
@@ -286,7 +286,7 @@ async def list_all_batches(
                 "start_index": b.get("start_index"),
                 "end_index": b.get("end_index"),
                 "image_count": b.get("image_count"),
-                "status": b.get("status"),
+                "status": _normalize_status(b.get("status")),
                 "assigned_to": assigned_to,
                 "annotator_name": annotator_name,
                 "deadline": b.get("deadline").isoformat() if b.get("deadline") else None,
@@ -512,7 +512,7 @@ async def reassign_batch(
 
 @router.get("/my-assignments/list", response_model=dict)
 async def get_my_assignments(
-    status: str = Query(None),
+    batch_status: Optional[str] = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     current_user: dict = Depends(require_annotator_or_admin),
@@ -533,13 +533,13 @@ async def get_my_assignments(
 
         # Parse status filter
         status_filter = None
-        if status:
+        if batch_status:
             try:
-                status_filter = TaskStatus(status)
+                status_filter = TaskStatus(batch_status)
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid status: {status}",
+                    detail=f"Invalid status: {batch_status}",
                 )
 
         # Get batches assigned to this annotator
@@ -809,8 +809,19 @@ async def get_review_queue(
 # ─── helper functions ───────────────────────────────────────────────────────
 
 
+def _normalize_status(status_val: str) -> str:
+    if not status_val:
+        return "pending"
+    if status_val in ("annotated", "under_review"):
+        return "submitted"
+    if status_val == "rejected":
+        return "rework"
+    return status_val
+
+
 def _format_batch_response(batch: dict) -> TaskBatchResponse:
     """Format batch document to response model."""
+    status_val = _normalize_status(batch.get("status"))
     return TaskBatchResponse(
         _id=str(batch["_id"]),
         project_id=batch["project_id"],
@@ -818,7 +829,7 @@ def _format_batch_response(batch: dict) -> TaskBatchResponse:
         start_index=batch["start_index"],
         end_index=batch["end_index"],
         image_count=batch["image_count"],
-        status=TaskStatus(batch["status"]),
+        status=TaskStatus(status_val),
         assigned_to=batch.get("assigned_to"),
         assigned_date=batch.get("assigned_date"),
         deadline=batch.get("deadline"),
@@ -836,7 +847,7 @@ def _format_batch_dict(batch: dict) -> dict:
         "start_index": batch.get("start_index"),
         "end_index": batch.get("end_index"),
         "image_count": batch.get("image_count"),
-        "status": batch.get("status"),
+        "status": _normalize_status(batch.get("status")),
         "assigned_to": batch.get("assigned_to"),
         "assigned_date": batch.get("assigned_date").isoformat() if batch.get("assigned_date") else None,
         "deadline": batch.get("deadline").isoformat() if batch.get("deadline") else None,
