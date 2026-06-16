@@ -24,6 +24,7 @@ class TaskStatus(str, Enum):
     ASSIGNED = "assigned"
     IN_PROGRESS = "in_progress"
     SUBMITTED = "submitted"
+    UNDER_REVIEW = "under_review"
     APPROVED = "approved"
     REWORK = "rework"
 

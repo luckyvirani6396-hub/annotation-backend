@@ -507,6 +507,77 @@ async def reassign_batch(
         )
 
 
+@router.post("/{batch_id}/assign-reviewer", response_model=TaskBatchResponse)
+async def assign_reviewer(
+    batch_id: str,
+    request: TaskBatchAssign,
+    current_user: dict = Depends(require_admin),
+):
+    """
+    Assign reviewer/checker to batch (admin only).
+    
+    Transitions batch from SUBMITTED to UNDER_REVIEW status.
+    """
+    db = db_manager.get_db()
+    batch_repo = TaskBatchRepository(db)
+    user_repo = UserRepository(db)
+    audit_repo = AuditLogRepository(db)
+
+    try:
+        # Get batch
+        batch = await batch_repo.get_batch_by_id(batch_id)
+        if not batch:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Batch not found",
+            )
+
+        # Verify reviewer exists
+        reviewer = await user_repo.get_user_by_id(request.annotator_id)
+        if not reviewer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Reviewer not found",
+            )
+
+        # Update batch: reviewed_by and status
+        success = await batch_repo.update_batch_fields(
+            batch_id,
+            status=TaskStatus.UNDER_REVIEW.value,
+            reviewed_by=request.annotator_id,
+        )
+
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to assign reviewer",
+            )
+
+        # Log audit trail
+        await audit_repo.log_action(
+            user_id=str(current_user["_id"]),
+            action="assign_reviewer",
+            resource_type="batch",
+            resource_id=batch_id,
+            changes={
+                "reviewed_by": request.annotator_id,
+                "status": TaskStatus.UNDER_REVIEW.value,
+            },
+        )
+
+        updated_batch = await batch_repo.get_batch_by_id(batch_id)
+        return _format_batch_response(updated_batch)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error assigning reviewer: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to assign reviewer",
+        )
+
+
 # ─── annotator-specific endpoints ────────────────────────────────────────────
 
 
@@ -717,7 +788,7 @@ async def approve_batch(
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    if batch["status"] not in (TaskStatus.SUBMITTED.value,):
+    if batch["status"] not in (TaskStatus.SUBMITTED.value, TaskStatus.UNDER_REVIEW.value, "annotated"):
         raise HTTPException(
             status_code=400,
             detail=f"Batch cannot be approved from status '{batch['status']}'",
@@ -758,7 +829,7 @@ async def reject_batch(
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    if batch["status"] not in (TaskStatus.SUBMITTED.value,):
+    if batch["status"] not in (TaskStatus.SUBMITTED.value, TaskStatus.UNDER_REVIEW.value, "annotated"):
         raise HTTPException(
             status_code=400,
             detail=f"Batch cannot be rejected from status '{batch['status']}'",

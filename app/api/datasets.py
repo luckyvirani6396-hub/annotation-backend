@@ -42,11 +42,11 @@ async def _get_batch_summary(project_id: str, db) -> dict:
     batch_repo = TaskBatchRepository(db)
     batches, total = await batch_repo.get_batches_by_project(project_id, page=1, page_size=1000)
     if total == 0:
-        return {"total": 0, "pending": 0, "assigned": 0, "in_progress": 0, "submitted": 0, "approved": 0, "rework": 0}
+        return {"total": 0, "pending": 0, "assigned": 0, "in_progress": 0, "submitted": 0, "under_review": 0, "approved": 0, "rework": 0}
     counts: dict = {s.value: 0 for s in TaskStatus}
     for b in batches:
         s = b.get("status", TaskStatus.PENDING.value)
-        if s in ("annotated", "under_review"):
+        if s == "annotated":
             s = TaskStatus.SUBMITTED.value
         elif s == "rejected":
             s = TaskStatus.REWORK.value
@@ -57,6 +57,7 @@ async def _get_batch_summary(project_id: str, db) -> dict:
         "assigned": counts.get(TaskStatus.ASSIGNED.value, 0),
         "in_progress": counts.get(TaskStatus.IN_PROGRESS.value, 0),
         "submitted": counts.get(TaskStatus.SUBMITTED.value, 0),
+        "under_review": counts.get(TaskStatus.UNDER_REVIEW.value, 0),
         "approved": counts.get(TaskStatus.APPROVED.value, 0),
         "rework": counts.get(TaskStatus.REWORK.value, 0),
     }
