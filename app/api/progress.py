@@ -204,10 +204,13 @@ async def get_my_progress(
         # Count completed batches
         completed = sum(1 for b in batches if b.get("status") in ["annotated", "under_review", "approved"])
 
-        # Get all annotations by user
-        annotations = await annotation_collection.find(
-            {"annotator_id": user_id}
-        ).to_list(None)
+        # Get all annotations by user (either via annotator_id or fallback to user_id if annotator_id is missing)
+        annotations = await annotation_collection.find({
+            "$or": [
+                {"annotator_id": user_id},
+                {"annotator_id": {"$exists": False}, "user_id": user_id}
+            ]
+        }).to_list(None)
 
         # Get reviews by user (if checker)
         reviews = await db["annotation_reviews"].find(
@@ -289,10 +292,13 @@ async def get_user_progress(
         # Count completed batches
         completed = sum(1 for b in batches if b.get("status") in ["annotated", "under_review", "approved"])
 
-        # Get all annotations by user
-        annotations = await annotation_collection.find(
-            {"annotator_id": user_id}
-        ).to_list(None)
+        # Get all annotations by user (either via annotator_id or fallback to user_id if annotator_id is missing)
+        annotations = await annotation_collection.find({
+            "$or": [
+                {"annotator_id": user_id},
+                {"annotator_id": {"$exists": False}, "user_id": user_id}
+            ]
+        }).to_list(None)
 
         # Get reviews by user
         reviews = await db["annotation_reviews"].find(
@@ -355,9 +361,13 @@ async def get_team_progress(
         for user in users:
             user_id = str(user["_id"])
             batches = await batch_repo.get_batches_by_annotator(user_id)
-            annotations = await annotation_collection.find(
-                {"annotator_id": user_id}
-            ).to_list(None)
+            # Get all annotations by user (either via annotator_id or fallback to user_id if annotator_id is missing)
+            annotations = await annotation_collection.find({
+                "$or": [
+                    {"annotator_id": user_id},
+                    {"annotator_id": {"$exists": False}, "user_id": user_id}
+                ]
+            }).to_list(None)
 
             approved = sum(1 for a in annotations if a.get("status") == "approved")
             perf_score = (approved / len(annotations) * 100) if annotations else 0
@@ -379,7 +389,7 @@ async def get_team_progress(
             "total_annotations": len(all_annotations),
             "approved": sum(1 for a in all_annotations if a.get("status") == "approved"),
             "rejected": sum(1 for a in all_annotations if a.get("status") == "rejected"),
-            "pending": sum(1 for a in all_annotations if a.get("status") == "pending"),
+            "pending": sum(1 for a in all_annotations if a.get("status", "pending") == "pending"),
             "user_stats": sorted(user_stats, key=lambda x: x["performance_score"], reverse=True),
         }
 

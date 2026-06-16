@@ -512,6 +512,8 @@ def _persist_dataset(
             assigned_ann_id = (a["id"] + ann_id_offset) if append_mode else a["id"]
             ann_docs.append({
                 "user_id": user_id,
+                "annotator_id": user_id,
+                "status": "pending",
                 "dataset_id": dataset_id,
                 "dataset_name": dataset_name,
                 "annotation_id": assigned_ann_id,
@@ -623,6 +625,8 @@ def _insert_coco_annotations_zip(
             bbox = a.get("bbox") or []
             ann_docs.append({
                 "user_id": user_id,
+                "annotator_id": user_id,
+                "status": "pending",
                 "dataset_id": dataset_id,
                 "dataset_name": dataset_name,
                 "annotation_id": a["id"],
